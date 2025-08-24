@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Portfolio Allocator & Forecaster</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        .tab-button.active { 
+            background-color: #3B82F6; 
+            color: white; 
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <div class="container mx-auto px-4 py-8">
+        <div class="flex justify-between items-center mb-8">
+            <h1 class="text-4xl font-bold text-gray-800">Portfolio Manager</h1>
+            
+            <!-- Save/Load Controls -->
+            <div class="flex space-x-3">
+                <button id="save-portfolio-btn" class="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-md transition-colors flex items-center">
+                    💾 Save Portfolio
+                </button>
+                <button id="load-portfolio-btn" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-md transition-colors flex items-center">
+                    📁 Load Portfolio
+                </button>
+            </div>
+        </div>
+        
+        <!-- Tab Navigation -->
+        <div class="flex justify-center mb-8">
+            <div class="bg-white rounded-lg shadow-md p-1">
+                <button id="allocator-tab" class="tab-button active px-6 py-3 rounded-md font-medium transition-colors">
+                    Portfolio Allocator
+                </button>
+                <button id="forecaster-tab" class="tab-button px-6 py-3 rounded-md font-medium transition-colors">
+                    Forecaster & Planner
+                </button>
+            </div>
+        </div>
+
+        <!-- Allocator Tab -->
+        <div id="allocator-content" class="tab-content active">
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <!-- Current Portfolio Section -->
+                <div class="bg-white rounded-lg shadow-md p-6">
+                    <h2 class="text-2xl font-semibold mb-6 text-gray-800">Current Portfolio</h2>
+                    
+                    <!-- API Configuration -->
+                    <div class="mb-6 p-4 bg-blue-50 rounded-lg">
+                        <h3 class="text-lg font-medium mb-4">🔧 API Configuration (Optional)</h3>
+                        <p class="text-sm text-gray-600 mb-3">Add your own API keys for better real-time data. Leave blank to use demo keys.</p>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            <input type="text" id="finnhub-key" placeholder="Finnhub API Key (Free at finnhub.io)" 
+                                   class="text-sm border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            <input type="text" id="iex-key" placeholder="IEX Cloud API Key (Free at iexcloud.io)" 
+                                   class="text-sm border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        </div>
+                        <button id="update-keys-btn" class="mt-2 text-sm bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded transition-colors">
+                            Update API Keys
+                        </button>
+                    </div>
+
+                    <!-- Add Stock Form -->
+                    <div class="mb-6 p-4 bg-gray-50 rounded-lg">
+                        <h3 class="text-lg font-medium mb-4">Add Stock</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <input type="text" id="ticker-input" placeholder="Ticker (e.g., AAPL)" 
+                                   class="border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            <input type="number" id="shares-input" placeholder="Number of Shares" 
+                                   class="border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            <button id="add-stock-btn" 
+                                    class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-md transition-colors">
+                                Add Stock
+                            </button>
+                        </div>
+                        <div id="stock-price" class="mt-2 text-sm text-gray-600"></div>
+                    </div>
+
+                    <!-- Portfolio Holdings -->
+                    <div id="portfolio-holdings" class="mb-6">
+                        <h3 class="text-lg font-medium mb-4">Holdings</h3>
+                        <div id="holdings-list" class="space-y-2"></div>
+                    </div>
+
+                    <!-- Portfolio Summary -->
+                    <div id="portfolio-summary" class="p-4 bg-blue-50 rounded-lg">
+                        <h3 class="text-lg font-medium mb-2">Portfolio Summary</h3>
+                        <div id="total-value" class="text-2xl font-bold text-blue-600 mb-2">$0.00</div>
+                        <div id="allocation-breakdown" class="text-sm text-gray-600"></div>
+                    </div>
+                </div>
+
+                <!-- Rebalancing Section -->
+                <div class="bg-white rounded-lg shadow-md p-6">
+                    <h2 class="text-2xl font-semibold mb-6 text-gray-800">Portfolio Rebalancing</h2>
+                    
+                    <!-- Cash Available -->
+                    <div class="mb-6">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Cash Available</label>
+                        <input type="number" id="cash-available" placeholder="Enter cash amount" 
+                               class="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    </div>
+
+                    <!-- Target Allocation -->
+                    <div class="mb-6">
+                        <h3 class="text-lg font-medium mb-4">Target Allocation</h3>
+                        <div id="target-allocation-inputs" class="space-y-2"></div>
+                        <button id="calculate-rebalance-btn" 
+                                class="mt-4 bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-md transition-colors">
+                            Calculate Rebalancing
+                        </button>
+                    </div>
+
+                    <!-- Rebalancing Results -->
+                    <div id="rebalancing-results" class="hidden p-4 bg-green-50 rounded-lg">
+                        <h3 class="text-lg font-medium mb-4">Rebalancing Recommendations</h3>
+                        <div id="purchase-recommendations" class="space-y-2"></div>
+                        <div id="forecasted-allocation" class="mt-4 pt-4 border-t border-green-200"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Forecaster Tab -->
+        <div id="forecaster-content" class="tab-content">
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <!-- Forecasting Parameters -->
+                <div class="bg-white rounded-lg shadow-md p-6">
+                    <h2 class="text-2xl font-semibold mb-6 text-gray-800">Forecasting Parameters</h2>
+                    
+                    <!-- Initial Portfolio Value -->
+                    <div class="mb-6 p-4 bg-green-50 rounded-lg">
+                        <h3 class="text-lg font-medium mb-2">📊 Starting Portfolio</h3>
+                        <div id="initial-portfolio-value" class="text-2xl font-bold text-green-600 mb-2">$0.00</div>
+                        <div id="initial-portfolio-breakdown" class="text-sm text-gray-600"></div>
+                        <button id="refresh-portfolio-btn" class="mt-2 text-sm bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded transition-colors">
+                            Refresh from Current Portfolio
+                        </button>
+                    </div>
+
+                    <!-- Monthly Investment -->
+                    <div class="mb-6">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">💰 Monthly Investment</label>
+                        <input type="number" id="monthly-investment" placeholder="Enter monthly amount" 
+                               class="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-500">
+                    </div>
+
+                    <!-- Current Allocation -->
+                    <div class="mb-6">
+                        <h3 class="text-lg font-medium mb-4">🎯 Current Allocation (2025)</h3>
+                        <div id="current-allocation-inputs" class="space-y-2"></div>
+                    </div>
+
+                    <!-- Timeline Changes -->
+                    <div class="mb-6">
+                        <h3 class="text-lg font-medium mb-4">📅 Timeline Changes</h3>
+                        <p class="text-sm text-gray-600 mb-3">Add points where monthly investment or allocation changes</p>
+                        <div id="timeline-changes" class="space-y-4">
+                            <button id="add-timeline-change-btn" class="w-full p-3 border-2 border-dashed border-gray-300 rounded-lg text-gray-500 hover:border-purple-300 hover:text-purple-500 transition-colors">
+                                + Add Timeline Change
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Advanced Options -->
+                    <div class="mb-6 p-4 bg-blue-50 rounded-lg">
+                        <h3 class="text-lg font-medium mb-4">⚙️ Advanced Options</h3>
+                        <div class="space-y-3">
+                            <label class="flex items-center">
+                                <input type="checkbox" id="include-dividends" checked class="mr-2">
+                                <span class="text-sm">Include dividend reinvestment (annual)</span>
+                            </label>
+                            <label class="flex items-center">
+                                <input type="checkbox" id="use-10yr-avg" checked class="mr-2">
+                                <span class="text-sm">Use 10-year average returns</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <button id="generate-forecast-btn" 
+                            class="w-full bg-purple-500 hover:bg-purple-600 text-white px-4 py-2 rounded-md transition-colors">
+                        🔮 Generate Advanced Forecast
+                    </button>
+                </div>
+
+                <!-- Forecast Results -->
+                <div class="bg-white rounded-lg shadow-md p-6">
+                    <h2 class="text-2xl font-semibold mb-6 text-gray-800">Forecast Results</h2>
+                    
+                    <!-- Forecast Chart -->
+                    <div class="mb-6">
+                        <canvas id="forecast-chart" width="400" height="200"></canvas>
+                    </div>
+
+                    <!-- Forecast Table -->
+                    <div id="forecast-table" class="overflow-x-auto">
+                        <table class="w-full text-sm">
+                            <thead>
+                                <tr class="border-b">
+                                    <th class="text-left py-2">Years</th>
+                                    <th class="text-right py-2">Portfolio Value</th>
+                                    <th class="text-right py-2">Total Invested</th>
+                                    <th class="text-right py-2">Gains</th>
+                                </tr>
+                            </thead>
+                            <tbody id="forecast-table-body">
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Save Portfolio Modal -->
+    <div id="save-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center z-50">
+        <div class="bg-white rounded-lg p-6 w-[500px] max-w-90vw">
+            <h3 class="text-xl font-semibold mb-4 text-gray-800">💾 Save Portfolio Profile</h3>
+            
+            <!-- Save Option Selection -->
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 mb-3">Save Option</label>
+                <div class="space-y-2">
+                    <label class="flex items-center">
+                        <input type="radio" name="save-option" value="new" id="save-as-new" checked 
+                               class="mr-3 text-green-500 focus:ring-green-500">
+                        <span class="text-sm">🆕 Save as New Portfolio</span>
+                    </label>
+                    <label class="flex items-center">
+                        <input type="radio" name="save-option" value="update" id="save-as-update" 
+                               class="mr-3 text-blue-500 focus:ring-blue-500">
+                        <span class="text-sm">🔄 Update Existing Portfolio</span>
+                    </label>
+                </div>
+            </div>
+            
+            <!-- Portfolio Name Input -->
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 mb-2">Portfolio Profile Name</label>
+                <input type="text" id="portfolio-name-input" placeholder="e.g., Conservative Portfolio, Growth Strategy" 
+                       class="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500">
+            </div>
+            
+            <!-- Existing Portfolio Selection (hidden by default) -->
+            <div id="existing-portfolio-section" class="mb-4 hidden">
+                <label class="block text-sm font-medium text-gray-700 mb-2">Select Portfolio to Update</label>
+                <select id="existing-portfolio-select" 
+                        class="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <option value="">Choose a portfolio to update...</option>
+                </select>
+            </div>
+            
+            <div class="mb-4 p-3 bg-gray-50 rounded-lg">
+                <h4 class="font-medium text-gray-700 mb-2">What will be saved:</h4>
+                <ul class="text-sm text-gray-600 space-y-1">
+                    <li>• Current stock holdings (tickers and quantities)</li>
+                    <li>• Allocation percentages and monthly investment</li>
+                    <li>• Timeline changes and forecasting settings</li>
+                    <li>• Dividend reinvestment preferences</li>
+                </ul>
+            </div>
+            
+            <div class="flex space-x-3">
+                <button id="confirm-save-btn" class="flex-1 bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-md transition-colors">
+                    💾 Save Profile
+                </button>
+                <button id="cancel-save-btn" class="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-700 px-4 py-2 rounded-md transition-colors">
+                    Cancel
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Load Portfolio Modal -->
+    <div id="load-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center z-50">
+        <div class="bg-white rounded-lg p-6 w-[600px] max-w-90vw max-h-[80vh] overflow-y-auto">
+            <h3 class="text-xl font-semibold mb-4 text-gray-800">📁 Load Portfolio Profile</h3>
+            
+            <div id="portfolio-list" class="space-y-3 mb-4">
+                <!-- Portfolio profiles will be populated here -->
+            </div>
+            
+            <div id="no-portfolios" class="hidden text-center py-8 text-gray-500">
+                <div class="text-4xl mb-2">📂</div>
+                <p>No saved portfolios found.</p>
+                <p class="text-sm">Create and save a portfolio first!</p>
+            </div>
+            
+            <div class="flex space-x-3">
+                <button id="refresh-portfolios-btn" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-md transition-colors">
+                    🔄 Refresh List
+                </button>
+                <button id="cancel-load-btn" class="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-700 px-4 py-2 rounded-md transition-colors">
+                    Cancel
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
