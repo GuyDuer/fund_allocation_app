@@ -352,32 +352,117 @@ class PortfolioManager {
         const currentValue = this.portfolio.reduce((sum, stock) => sum + stock.totalValue, 0);
         const futureValue = currentValue + cashAvailable;
 
-        // Calculate target values and required purchases
-        const recommendations = [];
-        let remainingCash = cashAvailable;
+        // Use optimized algorithm to maximize cash usage
+        const recommendations = this.optimizeRebalancing(
+            this.portfolio,
+            targetAllocations,
+            currentValue,
+            cashAvailable
+        );
 
-        for (const stock of this.portfolio) {
+        const totalSpent = recommendations.reduce((sum, rec) => sum + rec.cost, 0);
+        const remainingCash = cashAvailable - totalSpent;
+
+        this.displayRebalancingResults(recommendations, remainingCash, futureValue - remainingCash);
+    }
+
+    optimizeRebalancing(portfolio, targetAllocations, currentValue, cashAvailable) {
+        // Calculate max shares we can buy for each stock based on target allocation
+        const futureValue = currentValue + cashAvailable;
+        const stockLimits = [];
+        
+        for (const stock of portfolio) {
             const targetValue = futureValue * targetAllocations[stock.ticker];
-            const currentValue = stock.totalValue;
-            const additionalValueNeeded = targetValue - currentValue;
+            const currentStockValue = stock.totalValue;
+            const additionalValueNeeded = targetValue - currentStockValue;
             
             if (additionalValueNeeded > 0) {
-                const sharesToBuy = Math.floor(additionalValueNeeded / stock.price);
-                const costOfShares = sharesToBuy * stock.price;
-                
-                if (costOfShares <= remainingCash) {
-                    recommendations.push({
+                const maxShares = Math.floor(additionalValueNeeded / stock.price);
+                if (maxShares > 0) {
+                    stockLimits.push({
                         ticker: stock.ticker,
-                        shares: sharesToBuy,
-                        cost: costOfShares,
-                        newTotal: currentValue + costOfShares
+                        price: stock.price,
+                        maxShares: maxShares,
+                        currentValue: currentStockValue
                     });
-                    remainingCash -= costOfShares;
                 }
             }
         }
 
-        this.displayRebalancingResults(recommendations, remainingCash, futureValue - remainingCash);
+        if (stockLimits.length === 0) {
+            return [];
+        }
+
+        // Use greedy approach with local search to maximize cash usage
+        let bestSolution = this.greedyRebalance(stockLimits, cashAvailable);
+        let bestSpent = bestSolution.reduce((sum, rec) => sum + rec.cost, 0);
+
+        // Try local improvements: for each stock, try adding one more share if under limit
+        let improved = true;
+        while (improved) {
+            improved = false;
+            
+            for (let i = 0; i < stockLimits.length; i++) {
+                const stock = stockLimits[i];
+                const currentRec = bestSolution.find(r => r.ticker === stock.ticker);
+                const currentShares = currentRec ? currentRec.shares : 0;
+                
+                if (currentShares < stock.maxShares) {
+                    const additionalCost = stock.price;
+                    const newSpent = bestSpent + additionalCost;
+                    
+                    if (newSpent <= cashAvailable) {
+                        // Try adding one more share
+                        const newSolution = bestSolution.map(rec => 
+                            rec.ticker === stock.ticker 
+                                ? { ...rec, shares: rec.shares + 1, cost: rec.cost + stock.price }
+                                : rec
+                        );
+                        
+                        if (!currentRec) {
+                            newSolution.push({
+                                ticker: stock.ticker,
+                                shares: 1,
+                                cost: stock.price,
+                                newTotal: stock.currentValue + stock.price
+                            });
+                        }
+                        
+                        bestSolution = newSolution;
+                        bestSpent = newSpent;
+                        improved = true;
+                    }
+                }
+            }
+        }
+
+        return bestSolution;
+    }
+
+    greedyRebalance(stockLimits, cashAvailable) {
+        const recommendations = [];
+        let remainingCash = cashAvailable;
+
+        // Sort by price (buy cheaper stocks first to maximize shares)
+        const sortedStocks = [...stockLimits].sort((a, b) => a.price - b.price);
+
+        for (const stock of sortedStocks) {
+            const maxAffordable = Math.floor(remainingCash / stock.price);
+            const sharesToBuy = Math.min(maxAffordable, stock.maxShares);
+            
+            if (sharesToBuy > 0) {
+                const cost = sharesToBuy * stock.price;
+                recommendations.push({
+                    ticker: stock.ticker,
+                    shares: sharesToBuy,
+                    cost: cost,
+                    newTotal: stock.currentValue + cost
+                });
+                remainingCash -= cost;
+            }
+        }
+
+        return recommendations;
     }
 
     displayRebalancingResults(recommendations, remainingCash, investedAmount) {
